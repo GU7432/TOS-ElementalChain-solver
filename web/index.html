@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TOS 消珠助手</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 10 10%27%3E%3Ccircle cx=%275%27 cy=%275%27 r=%275%27 fill=%27%233b82f6%27/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+  --accent: #2563eb; --accent-text: #fff; --danger: #dc2626; --warn: #b45309; --ok: #15803d;
+  --warn-bg: #fff7e6; --err-bg: #fdecec; --ok-bg: #eaf7ee;
+  --o-0: #3b82f6; --o-1: #ef4444; --o-2: #22c55e; --o-3: #eab308; --o-4: #a855f7; --o-5: #ec4899;
+  --o-unk: #cbd2dc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #98a1b3; --line: #2c3340;
+    --accent: #3b82f6; --warn-bg: #2d2412; --err-bg: #2f1719; --ok-bg: #132619; --o-unk: #3a4250;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+body { padding: 0 16px 48px; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0 8px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 620px; margin: 0 auto; }
+header h1 { font-size: 18px; margin: 0; flex: 1; white-space: nowrap; }
+nav { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+nav button { border: 0; background: none; color: var(--muted); padding: 7px 14px; border-radius: 7px; font-size: 15px; cursor: pointer; }
+nav button.on { background: var(--accent); color: var(--accent-text); }
+main { max-width: 620px; margin: 0 auto; }
+section { display: none; } section.on { display: block; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
+.card h2 { font-size: 15px; margin: 0 0 10px; }
+.muted { color: var(--muted); font-size: 13px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button.btn { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 9px;
+  padding: 8px 13px; font-size: 14px; cursor: pointer; }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.btn.danger { color: var(--danger); }
+button.btn:disabled { opacity: .5; cursor: default; }
+
+/* 盤面 */
+.board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; width: 100%; max-width: 360px; margin: 6px auto; user-select: none; }
+.cell { aspect-ratio: 1; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 700; color: #fff; font-size: clamp(14px, 5vw, 22px); cursor: pointer; position: relative;
+  border: 3px solid transparent; text-shadow: 0 1px 2px rgba(0,0,0,.35); transition: transform .08s; }
+.cell:active { transform: scale(.94); }
+.cell.unk { background: var(--o-unk); color: var(--muted); text-shadow: none; }
+.cell.sel { border-color: var(--text); box-shadow: 0 0 0 2px var(--card) inset; }
+.cell.changed { outline: 2px dashed var(--text); outline-offset: 1px; }
+.cell .badge { position: absolute; top: -4px; right: -4px; background: var(--text); color: var(--card);
+  font-size: 11px; border-radius: 9px; padding: 1px 5px; text-shadow: none; }
+.heat .cell { border-radius: 10px; font-size: 12px; font-weight: 600; text-shadow: none; }
+.heat .cell .sym { font-size: 11px; opacity: .85; }
+.heat .cell .v { font-size: clamp(13px, 4vw, 17px); font-weight: 800; }
+.heat .cell.best { border-color: var(--text); }
+.axis { display: grid; grid-template-columns: repeat(5, 1fr); max-width: 360px; margin: 0 auto; text-align: center; font-size: 11px; color: var(--muted); }
+
+.palette { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 8px 0; }
+.palette .cell { width: 42px; font-size: 18px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.msg { border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 14px; white-space: pre-wrap; }
+.msg.err { background: var(--err-bg); color: var(--danger); }
+.msg.warn { background: var(--warn-bg); color: var(--warn); }
+.msg.ok { background: var(--ok-bg); color: var(--ok); }
+input[type=number], textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 15px; }
+input[type=number] { width: 90px; }
+textarea { width: 100%; font-family: inherit; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 10px; padding: 10px; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; background: var(--accent); border-radius: 5px; min-width: 2px; }
+.cibar { position: relative; height: 18px; background: var(--bg); border-radius: 4px; }
+.cibar .ci { position: absolute; top: 4px; height: 10px; background: var(--accent); opacity: .35; border-radius: 3px; }
+.cibar .pt { position: absolute; top: 1px; width: 4px; height: 16px; background: var(--accent); border-radius: 2px; margin-left: -2px; }
+.cibar .uni { position: absolute; top: -2px; width: 0; height: 22px; border-left: 2px dashed var(--muted); }
+details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 1s linear infinite; vertical-align: -2px; }
+@keyframes s { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TOS 消珠助手</h1>
+  <nav>
+    <button data-tab="rec" class="on">記錄</button>
+    <button data-tab="adv">建議</button>
+    <button data-tab="stat">統計</button>
+  </nav>
+</header>
+<main>
+
+<!-- ====================== 記錄 ====================== -->
+<section id="rec" class="on">
+  <div id="recError"></div>
+
+  <div class="card" id="curCard">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="curTitle">目前盤面</h2>
+      <label class="muted"><input type="checkbox" id="showAdv"> 顯示建議</label>
+    </div>
+    <div class="muted" id="curHint">點一顆珠 = 選擇要刪除的位置</div>
+    <div class="board" id="curBoard"></div>
+    <div class="muted" id="curAdvNote" style="text-align:center"></div>
+  </div>
+
+  <div class="card hidden" id="resCard">
+    <h2 id="resTitle">刪除後的結果盤面</h2>
+    <div class="muted">已經幫你把該欄往下移、頂端補「?」。把和遊戲不一樣的格子改掉：先點下方顏色，再點格子。虛線框 = 和刪除前不同的格子。</div>
+    <div class="board" id="resBoard"></div>
+    <div class="palette" id="resPalette"></div>
+    <div class="row" style="margin-top:8px">
+      <span>這一步消了</span><input type="number" id="elimInput" min="0" placeholder="選填"><span>顆</span>
+      <span class="muted">（整串連鎖總共，不含刪掉的那顆；不確定就留空）</span>
+    </div>
+    <div id="resMsg"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="saveStep">儲存這一步</button>
+      <button class="btn hidden danger" id="forceStep">仍要儲存</button>
+      <button class="btn" id="cancelStep">取消</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="newCard">
+    <h2>新局的起始盤面</h2>
+    <div class="muted">先點顏色再點格子；也可以直接貼上 5 行文字。</div>
+    <div class="board" id="newBoard"></div>
+    <div class="palette" id="newPalette"></div>
+    <textarea id="newText" rows="5" placeholder="或貼上 5 行，例如：&#10;水水木火暗&#10;..."></textarea>
+    <div id="newMsg"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn primary" id="saveNew">儲存起始盤面</button>
+      <button class="btn" id="cancelNew">取消</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>最近紀錄</h2>
+      <div class="row">
+        <button class="btn" id="newGame">開新局</button>
+        <button class="btn danger" id="undo">復原上一步</button>
+      </div>
+    </div>
+    <div class="muted" id="logInfo"></div>
+    <table id="recent"></table>
+  </div>
+</section>
+
+<!-- ====================== 建議 ====================== -->
+<section id="adv">
+  <div class="card">
+    <h2>輸入盤面</h2>
+    <div class="board" id="advBoard"></div>
+    <div class="palette" id="advPalette"></div>
+    <div class="row">
+      <button class="btn" id="advLoad">載入目前紀錄盤面</button>
+      <button class="btn" id="advPasteBtn">貼上文字</button>
+      <button class="btn" id="advClear">清空</button>
+    </div>
+    <textarea id="advText" rows="5" class="hidden" placeholder="貼上 5 行，例如：&#10;水水木火暗&#10;..."></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="advGo">計算建議</button>
+    </div>
+    <div id="advMsg"></div>
+  </div>
+
+  <div class="card hidden" id="advResult">
+    <h2>長期優勢（0 = 最佳，負數 = 長期少消幾顆）</h2>
+    <div class="axis"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="board heat" id="heatBoard"></div>
+    <div class="muted" style="text-align:center">格子上方是屬性，大字是長期差距，小字是這一步期望消除數</div>
+    <div id="greedyNote"></div>
+    <table id="rankTable"></table>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="verifyBtn">蒙地卡羅驗證前 5 名（約 3–10 秒）</button>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</section>
+
+<!-- ====================== 統計 ====================== -->
+<section id="stat">
+  <div class="card">
+    <div class="row">
+      <button class="btn primary" id="statsBtn">計算消除統計</button>
+      <button class="btn" id="analyzeBtn">分析天降機率</button>
+    </div>
+    <div class="muted" style="margin-top:6px">資料來源：紀錄檔。步數多時可能要等十幾秒。</div>
+  </div>
+  <div id="statsOut"></div>
+  <div id="analyzeOut"></div>
+</section>
+</main>
+
+<script>
+const N = 5;
+let SYM = ["水","火","木","光","暗"];
+let STATE = null;
+
+// ---------------- 小工具 ----------------
+const $ = (id) => document.getElementById(id);
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  let j = null;
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error((j && (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail))) || ("HTTP " + r.status));
+  return j;
+}
+function msg(el, kind, text) { el.innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ""; }
+function busy(btn, on, label) {
+  if (on) { btn.dataset.label = btn.innerHTML; btn.innerHTML = `<span class="spin"></span> ${label || "計算中…"}`; btn.disabled = true; }
+  else { btn.innerHTML = btn.dataset.label; btn.disabled = false; }
+}
+function colorOf(ch) { const k = SYM.indexOf(ch); return k < 0 ? null : `var(--o-${k % 6})`; }
+function blank() { return Array.from({length: N}, () => "?".repeat(N)); }
+function cellAt(rows, i) { return rows[Math.floor(i / N)][i % N]; }
+function setCell(rows, i, ch) { const r = Math.floor(i / N), c = i % N; rows[r] = rows[r].slice(0, c) + ch + rows[r].slice(c + 1); }
+function parseText(t) {
+  const rows = t.replace(/\//g, "\n").split("\n").map(x => x.replace(/[\s#].*$/, "").replace(/\s/g, "")).filter(x => x);
+  if (rows.length !== N || rows.some(r => [...r].length !== N)) throw new Error(`需要 ${N} 行、每行 ${N} 個符號`);
+  return rows.map(r => [...r].join(""));
+}
+const pos = (i) => `(${Math.floor(i / N) + 1},${i % N + 1})`;
+
+// 盤面繪製：opts = {onClick, sel, badges:{i:text}, changed:Set}
+function drawBoard(el, rows, opts = {}) {
+  el.innerHTML = "";
+  for (let i = 0; i < N * N; i++) {
+    const ch = cellAt(rows, i), d = document.createElement("div");
+    const col = colorOf(ch);
+    d.className = "cell" + (col ? "" : " unk") + (opts.sel === i ? " sel" : "") + (opts.changed && opts.changed.has(i) ? " changed" : "");
+    if (col) d.style.background = col;
+    d.textContent = ch;
+    if (opts.badges && opts.badges[i]) { const b = document.createElement("span"); b.className = "badge"; b.textContent = opts.badges[i]; d.appendChild(b); }
+    if (opts.onClick) d.onclick = () => opts.onClick(i);
+    el.appendChild(d);
+  }
+}
+function drawPalette(el, withUnknown, getSel, setSel) {
+  el.innerHTML = "";
+  const items = withUnknown ? [...SYM, "?"] : SYM;
+  for (const ch of items) {
+    const d = document.createElement("div"), col = colorOf(ch);
+    d.className = "cell" + (col ? "" : " unk") + (getSel() === ch ? " sel" : "");
+    if (col) d.style.background = col;
+    d.textContent = ch;
+    d.onclick = () => { setSel(ch); drawPalette(el, withUnknown, getSel, setSel); };
+    el.appendChild(d);
+  }
+}
+// 可編輯盤面：點格子 = 塗上目前選的顏色
+function makeEditor(boardEl, palEl, getRows, setRows, withUnknown, changedFn) {
+  let sel = SYM[0];
+  const redraw = () => drawBoard(boardEl, getRows(), { changed: changedFn ? changedFn() : null,
+    onClick: (i) => { const r = [...getRows()]; setCell(r, i, sel); setRows(r); redraw(); } });
+  drawPalette(palEl, withUnknown, () => sel, (c) => sel = c);
+  return { redraw };
+}
+
+// ---------------- 分頁 ----------------
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === b.dataset.tab));
+  try { localStorage.setItem("tab", b.dataset.tab); } catch (e) {}
+});
+try { const t = localStorage.getItem("tab"); if (t) document.querySelector(`nav button[data-tab=${t}]`)?.click(); } catch (e) {}
+
+// ================= 記錄 =================
+let delSel = null, resRows = null, beforeRows = null, newRows = blank(), advCache = null;
+let resEditor = null, newEditor = null;
+
+async function loadState() {
+  try { STATE = await api("/api/state"); } catch (e) { msg($("recError"), "err", e.message); return; }
+  SYM = STATE.symbols;
+  msg($("recError"), "err", STATE.error ? "紀錄檔格式錯誤：" + STATE.error + "\n（請直接打開紀錄檔修正）" : "");
+  $("logInfo").textContent = `紀錄檔：${STATE.log}　共 ${STATE.n_steps} 步　屬性：${SYM.join(" ")}`;
+  $("recent").innerHTML = STATE.recent.length
+    ? "<tr><th>行號</th><th>局</th><th>刪除</th><th class='num'>填寫的消除數</th></tr>" +
+      STATE.recent.map(s => `<tr><td>${s.line}</td><td>${s.game}</td><td>(${s.pos[0]},${s.pos[1]})</td><td class="num">${s.elim ?? "—"}</td></tr>`).join("")
+    : "<tr><td class='muted'>還沒有紀錄</td></tr>";
+  advCache = null;
+  closeStep();
+  drawCurrent();
+  if ($("showAdv").checked) loadAdvForCurrent();
+}
+
+function drawCurrent() {
+  const has = !!STATE.board;
+  $("curCard").classList.toggle("hidden", !has);
+  if (!has) { if ($("newCard").classList.contains("hidden")) openNew(); return; }
+  $("curTitle").textContent = `目前盤面（第 ${STATE.game} 局）`;
+  let badges = {};
+  if ($("showAdv").checked && advCache) {
+    advCache.order.slice(0, 3).forEach((a, k) => badges[a] = k === 0 ? "★" : String(k + 1));
+  }
+  drawBoard($("curBoard"), STATE.board, { sel: delSel, badges, onClick: chooseDelete });
+}
+
+async function loadAdvForCurrent() {
+  if (!STATE.board) return;
+  $("curAdvNote").innerHTML = `<span class="spin"></span> 計算建議中…`;
+  try {
+    advCache = await api("/api/advise", { rows: STATE.board });
+    const b = advCache.order[0];
+    $("curAdvNote").textContent = `★ 建議刪 ${pos(b)}；2、3 = 次佳。長期差距：` +
+      advCache.order.slice(1, 3).map(a => `${pos(a)} ${advCache.adv[a].toFixed(2)}`).join("、");
+  } catch (e) { $("curAdvNote").textContent = "建議失敗：" + e.message; }
+  drawCurrent();
+}
+$("showAdv").onchange = () => {
+  try { localStorage.setItem("showAdv", $("showAdv").checked ? "1" : ""); } catch (e) {}
+  if ($("showAdv").checked) loadAdvForCurrent(); else { $("curAdvNote").textContent = ""; drawCurrent(); }
+};
+try { $("showAdv").checked = !!localStorage.getItem("showAdv"); } catch (e) {}
+
+function chooseDelete(i) {
+  delSel = i;
+  beforeRows = [...STATE.board];
+  // 預填：該欄往下移一格，頂端補 ?
+  const r0 = Math.floor(i / N), c = i % N;
+  resRows = [...beforeRows];
+  for (let r = r0; r > 0; r--) setCell(resRows, r * N + c, cellAt(beforeRows, (r - 1) * N + c));
+  setCell(resRows, c, "?");
+  $("resTitle").textContent = `刪除 ${pos(i)} 後的結果盤面`;
+  $("resCard").classList.remove("hidden");
+  $("elimInput").value = "";
+  msg($("resMsg"), "", ""); $("forceStep").classList.add("hidden");
+  resEditor = makeEditor($("resBoard"), $("resPalette"), () => resRows, (r) => resRows = r, true, () => {
+    const s = new Set(); for (let k = 0; k < N * N; k++) if (cellAt(resRows, k) !== cellAt(beforeRows, k)) s.add(k); return s; });
+  resEditor.redraw();
+  drawCurrent();
+  $("resCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function closeStep() { delSel = null; $("resCard").classList.add("hidden"); }
+$("cancelStep").onclick = () => { closeStep(); drawCurrent(); };
+
+async function saveStep(force) {
+  if (resRows.join("").includes("?")) { msg($("resMsg"), "err", "還有「?」沒填：請把新掉下來的珠子顏色填上"); return; }
+  const v = $("elimInput").value.trim();
+  const elim = v === "" ? null : parseInt(v, 10);
+  const btn = force ? $("forceStep") : $("saveStep");
+  busy(btn, true, "檢查中…");
+  try {
+    const r = await api("/api/step", { pos: [Math.floor(delSel / N) + 1, delSel % N + 1], rows: resRows, elim, force: !!force });
+    if (!r.ok) {
+      msg($("resMsg"), "err", "和規則對不上：" + r.error + "\n請檢查結果盤面、刪除位置或消除數。確定沒錯的話可以按「仍要儲存」。");
+      $("forceStep").classList.remove("hidden");
+      return;
+    }
+    await loadState();
+    const note = r.warn ? "已儲存，但請確認：" + r.warn : r.forced ? "已強制儲存（分析時這一步會被排除）" : "已儲存 ✓";
+    msg($("recError"), r.warn || r.forced ? "warn" : "ok", note);
+    setTimeout(() => { if ($("recError").textContent.startsWith("已儲存")) msg($("recError"), "", ""); }, 2500);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (e) { msg($("resMsg"), "err", e.message); }
+  finally { busy(btn, false); }
+}
+$("saveStep").onclick = () => saveStep(false);
+$("forceStep").onclick = () => saveStep(true);
+
+$("undo").onclick = async () => {
+  if (!confirm("刪除紀錄檔中的最後一步？")) return;
+  try { const r = await api("/api/undo", {}); await loadState(); msg($("recError"), "ok", "已刪除" + r.removed); }
+  catch (e) { msg($("recError"), "err", e.message); }
+};
+
+function openNew() {
+  newRows = STATE && STATE.board ? [...STATE.board] : blank();
+  $("newCard").classList.remove("hidden");
+  $("newText").value = ""; msg($("newMsg"), "", "");
+  newEditor = makeEditor($("newBoard"), $("newPalette"), () => newRows, (r) => newRows = r, true);
+  newEditor.redraw();
+}
+$("newGame").onclick = () => { closeStep(); openNew(); $("newCard").scrollIntoView({ behavior: "smooth" }); };
+$("cancelNew").onclick = () => $("newCard").classList.add("hidden");
+$("newText").oninput = () => { try { newRows = parseText($("newText").value); newEditor.redraw(); msg($("newMsg"), "", ""); } catch (e) {} };
+$("saveNew").onclick = async () => {
+  if (newRows.join("").includes("?")) { msg($("newMsg"), "err", "還有「?」沒填"); return; }
+  try { await api("/api/newgame", { rows: newRows }); $("newCard").classList.add("hidden"); await loadState(); msg($("recError"), "ok", "新局已建立"); }
+  catch (e) { msg($("newMsg"), "err", e.message); }
+};
+
+// ================= 建議 =================
+let advRows = blank(), advLast = null;
+const advEditor = { redraw() {} };
+function initAdvEditor() {
+  const ed = makeEditor($("advBoard"), $("advPalette"), () => advRows, (r) => advRows = r, true);
+  advEditor.redraw = ed.redraw; ed.redraw();
+}
+$("advLoad").onclick = () => { if (STATE && STATE.board) { advRows = [...STATE.board]; advEditor.redraw(); } else msg($("advMsg"), "err", "紀錄檔目前沒有盤面"); };
+$("advClear").onclick = () => { advRows = blank(); advEditor.redraw(); $("advResult").classList.add("hidden"); };
+$("advPasteBtn").onclick = () => $("advText").classList.toggle("hidden");
+$("advText").oninput = () => { try { advRows = parseText($("advText").value); advEditor.redraw(); msg($("advMsg"), "", ""); } catch (e) {} };
+
+function heatColor(v) {           // v <= 0；0 = 最佳（綠），越負越紅
+  const t = Math.min(1, -v / 5);
+  return `hsl(${Math.round(130 * (1 - t))}, 62%, ${42 - 6 * t}%)`;
+}
+$("advGo").onclick = async () => {
+  if (advRows.join("").includes("?")) { msg($("advMsg"), "err", "盤面還有「?」沒填"); return; }
+  busy($("advGo"), true);
+  try {
+    const r = await api("/api/advise", { rows: advRows });
+    advLast = { rows: [...advRows], res: r };
+    msg($("advMsg"), r.has_match ? "warn" : "", r.has_match ? "注意：這個盤面本身已有三連（遊戲中應該已經消掉了），照樣計算。" : "");
+    renderAdvice(r);
+  } catch (e) { msg($("advMsg"), "err", e.message); }
+  finally { busy($("advGo"), false); }
+};
+function renderAdvice(r) {
+  $("advResult").classList.remove("hidden");
+  $("verifyOut").innerHTML = "";
+  const el = $("heatBoard"); el.innerHTML = "";
+  const best = r.order[0];
+  for (let i = 0; i < N * N; i++) {
+    const d = document.createElement("div");
+    d.className = "cell" + (i === best ? " best" : "");
+    d.style.background = heatColor(r.adv[i]);
+    d.innerHTML = `<span class="sym">${esc(cellAt(advLast.rows, i))}${i === best ? " ★" : ""}</span>` +
+      `<span class="v">${r.adv[i] > -0.005 ? "0" : r.adv[i].toFixed(1)}</span><span class="sym">${r.imm[i].toFixed(1)}</span>`;
+    el.appendChild(d);
+  }
+  $("greedyNote").innerHTML = r.greedy != null
+    ? `<div class="msg warn">單步最多的是 ${pos(r.greedy)}（期望 ${r.imm[r.greedy].toFixed(2)} 顆），但長期來看比最佳少 ${(-r.adv[r.greedy]).toFixed(2)} 顆。</div>` : "";
+  $("rankTable").innerHTML = "<tr><th>名次</th><th>位置</th><th class='num'>這一步期望消除</th><th class='num'>長期差距</th></tr>" +
+    r.order.slice(0, 8).map((a, k) => `<tr><td>${k + 1}</td><td>${pos(a)} ${esc(cellAt(advLast.rows, a))}</td><td class="num">${r.imm[a].toFixed(2)}</td><td class="num">${r.adv[a].toFixed(2)}</td></tr>`).join("");
+}
+$("verifyBtn").onclick = async () => {
+  if (!advLast) return;
+  busy($("verifyBtn"), true, "模擬中…");
+  try {
+    const r = await api("/api/verify", { rows: advLast.rows, top: 5, rollouts: 200, horizon: 20 });
+    const imm = advLast.res.imm;
+    const differs = r.results[0].a !== advLast.res.order[0];
+    $("verifyOut").innerHTML = (differs ? `<div class="msg warn">驗證的第一名 ${pos(r.results[0].a)} 和上表不同：實際模擬比模型估計更可靠，建議以驗證為準。</div>` : "") +
+      `<div class="muted" style="margin:8px 0">每個候選各往後模擬 ${r.horizon} 步 × ${r.rollouts} 次。差距小於約 2 倍標準誤時，可視為差不多好。</div>` +
+      "<table><tr><th>名次</th><th>位置</th><th class='num'>這一步期望</th><th class='num'>與第一差</th><th class='num'>±標準誤</th></tr>" +
+      r.results.map((x, k) => `<tr><td>${k + 1}${k === 0 ? " ★" : ""}</td><td>${pos(x.a)}</td><td class="num">${imm[x.a].toFixed(2)}</td><td class="num">${x.diff.toFixed(2)}</td><td class="num">${x.se == null ? "" : x.se.toFixed(2)}</td></tr>`).join("") + "</table>";
+  } catch (e) { $("verifyOut").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  finally { busy($("verifyBtn"), false); }
+};
+
+// ================= 統計 =================
+function problemsHtml(p) {
+  let h = "";
+  if (p.warn.length) h += `<div class="msg warn">⚠ ${p.warn.length} 步的消除數很不尋常（仍有採用）：\n` + p.warn.slice(0, 20).map(w => `第 ${w.line} 行：${w.msg}`).join("\n") + "</div>";
+  if (p.bad.length) h += `<div class="msg err">⚠ ${p.bad.length} 步和規則不一致，已排除（請打開紀錄檔檢查該行附近）：\n` + p.bad.slice(0, 20).map(b => `第 ${b.line} 行：${b.msg}`).join("\n") + "</div>";
+  return h.replace(/\n/g, "<br>");
+}
+$("statsBtn").onclick = async () => {
+  busy($("statsBtn"), true);
+  try {
+    const r = await api("/api/stats");
+    let h = `<div class="card"><h2>消除統計</h2>${problemsHtml(r.problems)}`;
+    if (!r.ok) { $("statsOut").innerHTML = h + "<div class='muted'>沒有可用的資料</div></div>"; return; }
+    h += `<div class="muted" style="margin-bottom:8px">共 ${r.n_records} 步：${r.n_exact} 步精確、${r.n_post} 步有看不到的天降珠（用期望值）${r.n_bound ? `、${r.n_bound} 步是大連鎖（推估）` : ""}</div>`;
+    h += `<div class="stats">
+      <div class="stat"><div class="k">平均每步消除</div><div class="v">${r.mean.toFixed(2)}</div><div class="k">± ${r.ci95.toFixed(2)}（95%）</div></div>
+      <div class="stat"><div class="k">總消除</div><div class="v">${r.total.toFixed(0)}</div><div class="k">${r.total_lo != null ? "確定至少 " + r.total_lo.toFixed(0) : "顆"}</div></div>
+      <div class="stat"><div class="k">有消除的步數</div><div class="v">${Math.round(100 * r.has / r.n)}%</div><div class="k">${r.has} / ${r.n}</div></div>
+      <div class="stat"><div class="k">單步最多</div><div class="v">${r.max.toFixed(0)}</div><div class="k">顆</div></div></div>`;
+    const mx = Math.max(1, ...r.bins.map(b => b.k));
+    h += "<h2 style='margin-top:14px'>消除數分布</h2><table>" + r.bins.map(b =>
+      `<tr><td style="width:80px">${b.name}</td><td><div class="bar" style="width:${100 * b.k / mx}%"></div></td><td class="num" style="width:60px">${b.k} 步</td></tr>`).join("") + "</table>";
+    const bench = [...r.bench, { name: "你的紀錄", value: r.mean, me: true }];
+    const bm = Math.max(...bench.map(b => b.value));
+    h += "<h2 style='margin-top:14px'>對照（模擬：5 屬性、均等天降的長期平均）</h2><table>" + bench.map(b =>
+      `<tr><td style="width:150px">${b.me ? "<b>你的紀錄</b>" : b.name}</td><td><div class="bar" style="width:${100 * b.value / bm}%;${b.me ? "" : "opacity:.45"}"></div></td><td class="num" style="width:50px">${b.value.toFixed(2)}</td></tr>`).join("") + "</table>";
+    if (r.n < 100) h += `<div class="muted" style="margin-top:6px">只有 ${r.n} 步，運氣影響很大；100 步以上比較準。</div>`;
+    if (r.games.length > 1) h += "<h2 style='margin-top:14px'>各局</h2><table><tr><th>局</th><th class='num'>步數</th><th class='num'>總消除</th><th class='num'>平均</th></tr>" +
+      r.games.map(g => `<tr><td>${g.game}</td><td class="num">${g.n}</td><td class="num">${g.total.toFixed(1)}</td><td class="num">${g.mean.toFixed(2)}</td></tr>`).join("") + "</table>";
+    h += "<details style='margin-top:12px'><summary>逐步明細</summary><table><tr><th>行號</th><th>局</th><th>位置</th><th>消除</th></tr>" +
+      r.steps.map(s => `<tr><td>${s.line}</td><td>${s.game}</td><td>(${s.pos[0]},${s.pos[1]})</td><td>${esc(s.text)}${s.given != null ? " <span class='muted'>（填寫）</span>" : ""}</td></tr>`).join("") + "</table></details></div>";
+    $("statsOut").innerHTML = h;
+  } catch (e) { $("statsOut").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  finally { busy($("statsBtn"), false); }
+};
+$("analyzeBtn").onclick = async () => {
+  busy($("analyzeBtn"), true);
+  try {
+    const r = await api("/api/analyze");
+    let h = `<div class="card"><h2>天降機率</h2>${problemsHtml(r.problems)}`;
+    if (!r.ok) { $("analyzeOut").innerHTML = h + "<div class='muted'>沒有可用的資料</div></div>"; return; }
+    h += `<div class="muted">可用 ${r.used} 步，天降總數（含推估）≈ ${r.n_eff.toFixed(0)} 顆。虛線 = 均等（${r.uniform.toFixed(3)}），淡色條 = 95% 信賴區間。</div>`;
+    const top = Math.max(0.5, ...r.probs.map(x => x.hi)) * 1.05;
+    h += "<table style='margin-top:8px'><tr><th>屬性</th><th class='num'>估計</th><th></th><th class='num'>95% 區間</th></tr>" + r.probs.map((x, k) =>
+      `<tr><td><span class="cell" style="display:inline-flex;width:24px;font-size:13px;background:var(--o-${k % 6})">${esc(x.sym)}</span></td>
+       <td class="num">${x.p.toFixed(3)}</td>
+       <td style="width:45%"><div class="cibar"><div class="ci" style="left:${100 * x.lo / top}%;width:${100 * (x.hi - x.lo) / top}%"></div>
+         <div class="pt" style="left:${100 * x.p / top}%"></div><div class="uni" style="left:${100 * r.uniform / top}%"></div></div></td>
+       <td class="num muted">${x.lo.toFixed(2)}–${x.hi.toFixed(2)}</td></tr>`).join("") + "</table>";
+    h += `<div class="msg ${r.pvalue < 0.05 ? "warn" : "ok"}">均等檢定：p = ${r.pvalue.toFixed(4)} → ${esc(r.verdict)}</div>`;
+    h += `<div class="muted">目前每個機率誤差約 ±${r.err95.toFixed(3)}；想分辨 ±0.03 的偏差約需 ${r.need_draws} 顆天降。</div>`;
+    const bt = r.board_test;
+    h += bt.ok ? `<div class="msg ${Math.abs(bt.z) > 2.6 ? "warn" : "ok"}">天降是否「看盤面」：預期第一顆天降造成消除 ${bt.exp.toFixed(1)} 次，實際 ${bt.obs} 次（z = ${bt.z.toFixed(2)}）→ ${esc(bt.verdict)}</div>`
+      : `<div class="muted" style="margin-top:6px">（檢查天降是否「看盤面」需要更多資料，目前 ${bt.cnt} 步）</div>`;
+    $("analyzeOut").innerHTML = h + "</div>";
+  } catch (e) { $("analyzeOut").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  finally { busy($("analyzeBtn"), false); }
+};
+
+// ---------------- 啟動 ----------------
+loadState().then(initAdvEditor);
+</script>
+</body>
+</html>
